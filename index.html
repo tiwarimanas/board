@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blackboard App</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <!-- Google Fonts: Poppins -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Poppins', sans-serif;
+    }
+    /* Canvas styling */
+    #drawCanvas {
+      border: 1px solid #444;
+      display: block;
+    }
+    /* Canvas container fills viewport above the bottom navbar */
+    #canvasContainer {
+      position: absolute;
+      top: 0;
+      bottom: 56px; /* leave space for bottom navbar */
+      left: 0;
+      right: 0;
+    }
+  </style>
+</head>
+<body data-bs-theme="dark">
+  <!-- Canvas Container -->
+  <div id="canvasContainer">
+    <canvas id="drawCanvas"></canvas>
+  </div>
+
+  <!-- Navigation Toolbar (fixed at bottom) -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-bottom shadow">
+    <div class="container-fluid">
+      <!-- Left side: Tools & Shape selectors -->
+      <div class="d-flex align-items-center">
+        <!-- Background Color Picker -->
+        <div class="me-2">
+          <input type="color" id="bgColor" class="form-control form-control-sm form-control-color" title="Board Background Color" value="#1c1c1c">
+        </div>
+        <!-- Pen Color Picker -->
+        <div class="me-2">
+          <input type="color" id="penColor" class="form-control form-control-sm  form-control-color" title="Pen Color" value="#ffffff">
+        </div>
+        <!-- Pen Width -->
+        <div class="me-2" style="width:100px;">
+          <input type="range" id="penWidth" class="form-range" min="1" max="20" value="2" title="Pen Width">
+        </div>
+        <!-- Tool Buttons -->
+        <div class="btn-group me-2" role="group" aria-label="Drawing Tools">
+          <button class="btn border btn-sm" id="penBtn" title="Free Draw"><i class="bi bi-pencil-fill"></i></button>
+          <button class="btn border btn-sm" id="eraserBtn" title="Eraser"><i class="bi bi-eraser-fill"></i></button>
+          <button class="btn border btn-sm" id="rectBtn" title="Rectangle"><i class="bi bi-square"></i></button>
+          <button class="btn border btn-sm" id="triBtn" title="Triangle"><i class="bi bi-triangle-fill"></i></button>
+          <button class="btn border btn-sm" id="circleBtn" title="Circle"><i class="bi bi-circle"></i></button>
+          <button class="btn border btn-sm" id="lineBtn" title="Line">Line</button>
+        </div>
+        <!-- Clear Page (opens modal) -->
+        <button class="btn btn-sm bg-danger-subtle me-2" id="clearPageBtn" title="Clear Current Page"><i class="bi bi-trash"></i></button>
+        <!-- Fullscreen Toggle -->
+        <button class="btn bg-light-subtle border btn-sm me-2" id="fullscreenBtn" title="Toggle Fullscreen"><i class="bi bi-arrows-fullscreen"></i></button>
+      </div>
+
+      <!-- Center: Page Navigation -->
+      <div class="mx-auto d-flex align-items-center">
+        <button class="btn btn-sm bg-primary-subtle me-2" id="prevPageBtn" title="Previous Page"><i class="bi bi-arrow-left"></i></button>
+        <span class="navbar-text me-2" id="pageIndicator">Page 1</span>
+        <button class="btn btn-sm bg-primary-subtle me-2" id="nextPageBtn" title="Next Page"><i class="bi bi-arrow-right"></i></button>
+        <button class="btn btn-sm bg-light-subtle" id="addPageBtn" title="Add New Page"><i class="bi bi-plus"></i> Add</button>
+      </div>
+
+      <!-- Right side: Export/Import & Current Time -->
+      <div class="d-flex align-items-center">
+        <button class="btn bg-primary-subtle btn-sm me-2" id="exportPdfBtn">Export PDF</button>
+        <button class="btn bg-primary-subtle btn-sm me-2" id="exportJsonBtn">Export JSON</button>
+        <button class="btn bg-primary-subtle btn-sm me-2" id="importJsonBtn">Import JSON</button>
+        <input type="file" id="importFileInput" accept=".json" style="display:none">
+        <div id="currentTime" class="ms-2"></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Bootstrap Modal for Clear Confirmation -->
+  <div class="modal fade" id="clearModal" tabindex="-1" aria-labelledby="clearModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light">
+        <div class="modal-header">
+          <h5 class="modal-title" id="clearModalLabel">Confirm Clear</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          Are you sure you want to clear the current page?
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirmClearBtn">Yes, Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Required Libraries -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- FileSaver.js for JSON export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <script>
+    // Global variables and defaults
+    let boardBackground = "#1c1c1c";
+    let pages = [];
+    let currentPageIndex = 0;
+    let drawing = false;
+    let currentStroke = null;
+    // Allowed tools: "pen", "eraser", "rectangle", "triangle", "circle", "line"
+    let currentTool = 'pen';
+    let currentColor = "#ffffff";
+    let currentLineWidth = 2;
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Set initial canvas background style
+    canvas.style.background = boardBackground;
+
+    // Resize canvas to fill container
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      renderCurrentPage();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Initialize pages with one blank page
+    function initPages() {
+      pages = [];
+      currentPageIndex = 0;
+      pages.push({ strokes: [] });
+      updatePageIndicator();
+    }
+    function updatePageIndicator() {
+      $('#pageIndicator').text('Page ' + (currentPageIndex + 1));
+    }
+
+    // Render the current page (freehand strokes and shapes)
+    function renderCurrentPage() {
+      // Fill background
+      ctx.fillStyle = boardBackground;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const page = pages[currentPageIndex];
+      if (!page) return;
+      page.strokes.forEach(stroke => {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = stroke.lineWidth;
+        ctx.strokeStyle = (stroke.tool === 'eraser') ? boardBackground : stroke.color;
+        ctx.beginPath();
+        if(stroke.tool === 'pen' || stroke.tool === 'eraser'){
+          stroke.points.forEach((pt, idx) => {
+            if(idx === 0){
+              ctx.moveTo(pt.x, pt.y);
+            } else {
+              ctx.lineTo(pt.x, pt.y);
+            }
+          });
+          ctx.stroke();
+        } else if(stroke.tool === 'rectangle'){
+          const x = Math.min(stroke.start.x, stroke.end.x);
+          const y = Math.min(stroke.start.y, stroke.end.y);
+          const w = Math.abs(stroke.end.x - stroke.start.x);
+          const h = Math.abs(stroke.end.y - stroke.start.y);
+          ctx.strokeRect(x, y, w, h);
+        } else if(stroke.tool === 'line'){
+          ctx.moveTo(stroke.start.x, stroke.start.y);
+          ctx.lineTo(stroke.end.x, stroke.end.y);
+          ctx.stroke();
+        } else if(stroke.tool === 'circle'){
+          const dx = stroke.end.x - stroke.start.x;
+          const dy = stroke.end.y - stroke.start.y;
+          const radius = Math.sqrt(dx*dx + dy*dy);
+          ctx.arc(stroke.start.x, stroke.start.y, radius, 0, 2 * Math.PI);
+          ctx.stroke();
+        } else if(stroke.tool === 'triangle'){
+          const x1 = Math.min(stroke.start.x, stroke.end.x);
+          const x2 = Math.max(stroke.start.x, stroke.end.x);
+          const y1 = Math.min(stroke.start.y, stroke.end.y);
+          const y2 = Math.max(stroke.start.y, stroke.end.y);
+          const midX = (stroke.start.x + stroke.end.x) / 2;
+          ctx.moveTo(x1, y2); // bottom left
+          ctx.lineTo(x2, y2); // bottom right
+          ctx.lineTo(midX, y1); // top center
+          ctx.closePath();
+          ctx.stroke();
+        }
+      });
+    }
+
+    // Start drawing or shape creation
+    function startDrawing(x, y) {
+      drawing = true;
+      if(currentTool === 'pen' || currentTool === 'eraser'){
+        currentStroke = {
+          tool: currentTool,
+          color: currentColor,
+          lineWidth: currentLineWidth,
+          points: [{ x, y }]
+        };
+      } else {
+        // For shapes: store start and end points (initially same)
+        currentStroke = {
+          tool: currentTool,
+          color: currentColor,
+          lineWidth: currentLineWidth,
+          start: { x, y },
+          end: { x, y }
+        };
+      }
+      pages[currentPageIndex].strokes.push(currentStroke);
+    }
+    
+    // Update drawing or shape preview
+    function draw(x, y) {
+      if(!drawing) return;
+      if(currentTool === 'pen' || currentTool === 'eraser'){
+        currentStroke.points.push({ x, y });
+        ctx.beginPath();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = currentLineWidth;
+        ctx.strokeStyle = (currentTool === 'eraser') ? boardBackground : currentColor;
+        const pts = currentStroke.points;
+        if(pts.length > 1){
+          ctx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
+          ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+          ctx.stroke();
+        }
+      } else {
+        // For shapes, update the end point and re-render entire page to show preview
+        currentStroke.end = { x, y };
+        renderCurrentPage();
+      }
+    }
+    
+    // End drawing or shape creation
+    function stopDrawing() {
+      drawing = false;
+      currentStroke = null;
+    }
+    
+    // Get canvas-relative coordinates
+    function getCanvasPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      let x, y;
+      if(e.touches && e.touches.length){
+        x = e.touches[0].clientX - rect.left;
+        y = e.touches[0].clientY - rect.top;
+      } else {
+        x = e.clientX - rect.left;
+        y = e.clientY - rect.top;
+      }
+      return { x, y };
+    }
+    
+    // Export current work as a PDF file (each page is a PDF page)
+    async function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      let pdf = new jsPDF('landscape', 'pt', [canvas.width, canvas.height]);
+      for(let i = 0; i < pages.length; i++) {
+        let offscreen = document.createElement('canvas');
+        offscreen.width = canvas.width;
+        offscreen.height = canvas.height;
+        let offCtx = offscreen.getContext('2d');
+        offCtx.fillStyle = boardBackground;
+        offCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+        pages[i].strokes.forEach(stroke => {
+          offCtx.lineCap = 'round';
+          offCtx.lineJoin = 'round';
+          offCtx.lineWidth = stroke.lineWidth;
+          offCtx.strokeStyle = (stroke.tool === 'eraser') ? boardBackground : stroke.color;
+          offCtx.beginPath();
+          if(stroke.tool === 'pen' || stroke.tool === 'eraser'){
+            stroke.points.forEach((pt, idx) => {
+              if(idx === 0){
+                offCtx.moveTo(pt.x, pt.y);
+              } else {
+                offCtx.lineTo(pt.x, pt.y);
+              }
+            });
+          } else if(stroke.tool === 'rectangle'){
+            const x = Math.min(stroke.start.x, stroke.end.x);
+            const y = Math.min(stroke.start.y, stroke.end.y);
+            const w = Math.abs(stroke.end.x - stroke.start.x);
+            const h = Math.abs(stroke.end.y - stroke.start.y);
+            offCtx.strokeRect(x, y, w, h);
+          } else if(stroke.tool === 'line'){
+            offCtx.moveTo(stroke.start.x, stroke.start.y);
+            offCtx.lineTo(stroke.end.x, stroke.end.y);
+          } else if(stroke.tool === 'circle'){
+            const dx = stroke.end.x - stroke.start.x;
+            const dy = stroke.end.y - stroke.start.y;
+            const radius = Math.sqrt(dx*dx + dy*dy);
+            offCtx.arc(stroke.start.x, stroke.start.y, radius, 0, 2 * Math.PI);
+          } else if(stroke.tool === 'triangle'){
+            const x1 = Math.min(stroke.start.x, stroke.end.x);
+            const x2 = Math.max(stroke.start.x, stroke.end.x);
+            const y1 = Math.min(stroke.start.y, stroke.end.y);
+            const y2 = Math.max(stroke.start.y, stroke.end.y);
+            const midX = (stroke.start.x + stroke.end.x) / 2;
+            offCtx.moveTo(x1, y2);
+            offCtx.lineTo(x2, y2);
+            offCtx.lineTo(midX, y1);
+            offCtx.closePath();
+          }
+          offCtx.stroke();
+        });
+        let imgData = offscreen.toDataURL('image/jpeg', 1.0);
+        if(i > 0){
+          pdf.addPage();
+        }
+        pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+      }
+      pdf.save('blackboard.pdf');
+    }
+    
+    // Canvas event handlers
+    $(canvas).on('mousedown touchstart', function(e){
+      e.preventDefault();
+      const pos = getCanvasPos(e);
+      startDrawing(pos.x, pos.y);
+    });
+    $(canvas).on('mousemove touchmove', function(e){
+      e.preventDefault();
+      const pos = getCanvasPos(e);
+      draw(pos.x, pos.y);
+    });
+    $(canvas).on('mouseup touchend mouseleave', function(e){
+      e.preventDefault();
+      stopDrawing();
+    });
+    
+    // Update current time display in navbar every second
+    function updateTime(){
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString();
+      $('#currentTime').text(timeStr);
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+    
+    // Toolbar and modal event handlers
+    $(document).ready(function(){
+      initPages();
+      resizeCanvas();
+      
+      // Tool selection: free-draw
+      $('#penBtn').on('click', function(){
+        currentTool = 'pen';
+        $('.btn-group button').removeClass('btn-primary').addClass('border');
+        $(this).removeClass('border').addClass('btn-primary');
+      });
+      // Eraser
+      $('#eraserBtn').on('click', function(){
+        currentTool = 'eraser';
+        $('.btn-group button').removeClass('btn-primary').addClass('border');
+        $(this).removeClass('border').addClass('btn-primary');
+      });
+      // Rectangle
+      $('#rectBtn').on('click', function(){
+        currentTool = 'rectangle';
+        $('.btn-group button').removeClass('btn-primary').addClass('border');
+        $(this).removeClass('border').addClass('btn-primary');
+      });
+      // Triangle
+      $('#triBtn').on('click', function(){
+        currentTool = 'triangle';
+        $('.btn-group button').removeClass('btn-primary').addClass('border');
+        $(this).removeClass('border').addClass('btn-primary');
+      });
+      // Circle
+      $('#circleBtn').on('click', function(){
+        currentTool = 'circle';
+        $('.btn-group button').removeClass('btn-primary').addClass('border');
+        $(this).removeClass('border').addClass('btn-primary');
+      });
+      // Line
+      $('#lineBtn').on('click', function(){
+        currentTool = 'line';
+        $('.btn-group button').removeClass('btn-primary').addClass('border');
+        $(this).removeClass('border').addClass('btn-primary');
+      });
+      
+      // Background color change
+      $('#bgColor').on('change', function(){
+        boardBackground = $(this).val();
+        canvas.style.background = boardBackground;
+        renderCurrentPage();
+      });
+      // Pen color and width controls
+      $('#penColor').on('change', function(){
+        currentColor = $(this).val();
+      });
+      $('#penWidth').on('change', function(){
+        currentLineWidth = parseInt($(this).val());
+      });
+      
+      // Clear Page: show Bootstrap modal
+      $('#clearPageBtn').on('click', function(){
+        const clearModal = new bootstrap.Modal(document.getElementById('clearModal'));
+        clearModal.show();
+      });
+      // Confirm clear page action from modal
+      $('#confirmClearBtn').on('click', function(){
+        pages[currentPageIndex].strokes = [];
+        renderCurrentPage();
+        bootstrap.Modal.getInstance(document.getElementById('clearModal')).hide();
+      });
+      
+      // Fullscreen toggle button
+      $('#fullscreenBtn').on('click', function(){
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(err => {
+            alert(`Error attempting to enable full-screen mode: ${err.message}`);
+          });
+        } else {
+          document.exitFullscreen();
+        }
+      });
+      
+      // Page navigation
+      $('#addPageBtn').on('click', function(){
+        pages.push({ strokes: [] });
+        currentPageIndex = pages.length - 1;
+        updatePageIndicator();
+        renderCurrentPage();
+      });
+      $('#prevPageBtn').on('click', function(){
+        if(currentPageIndex > 0){
+          currentPageIndex--;
+          updatePageIndicator();
+          renderCurrentPage();
+        }
+      });
+      $('#nextPageBtn').on('click', function(){
+        if(currentPageIndex < pages.length - 1){
+          currentPageIndex++;
+          updatePageIndicator();
+          renderCurrentPage();
+        }
+      });
+      
+      // Export PDF
+      $('#exportPdfBtn').on('click', exportPDF);
+      
+      // Export JSON
+      $('#exportJsonBtn').on('click', function(){
+        const dataStr = JSON.stringify(pages);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        saveAs(blob, "blackboard.json");
+      });
+      // Import JSON
+      $('#importJsonBtn').on('click', function(){
+        $('#importFileInput').click();
+      });
+      $('#importFileInput').on('change', function(e){
+        if(e.target.files && e.target.files[0]){
+          const reader = new FileReader();
+          reader.onload = function(ev){
+            try {
+              const importedPages = JSON.parse(ev.target.result);
+              if(Array.isArray(importedPages)){
+                pages = importedPages;
+                currentPageIndex = 0;
+                updatePageIndicator();
+                renderCurrentPage();
+              } else {
+                alert("Invalid file format");
+              }
+            } catch(err){
+              alert("Error reading file: " + err);
+            }
+          };
+          reader.readAsText(e.target.files[0]);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
