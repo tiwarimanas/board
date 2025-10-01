@@ -1,498 +1,182 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Blackboard App</title>
-  <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <!-- Google Fonts: Poppins -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      overflow: hidden;
-      font-family: 'Poppins', sans-serif;
-    }
-    /* Canvas styling */
-    #drawCanvas {
-      border: 1px solid #444;
-      display: block;
-    }
-    /* Canvas container fills viewport above the bottom navbar */
-    #canvasContainer {
-      position: absolute;
-      top: 0;
-      bottom: 56px; /* leave space for bottom navbar */
-      left: 0;
-      right: 0;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Blackboard</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body data-bs-theme="dark">
-  <!-- Canvas Container -->
-  <div id="canvasContainer">
-    <canvas id="drawCanvas"></canvas>
-  </div>
-
-  <!-- Navigation Toolbar (fixed at bottom) -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-bottom shadow">
-    <div class="container-fluid">
-      <!-- Left side: Tools & Shape selectors -->
-      <div class="d-flex align-items-center">
-        <!-- Background Color Picker -->
-        <div class="me-2">
-          <input type="color" id="bgColor" class="form-control form-control-sm form-control-color" title="Board Background Color" value="#1c1c1c">
+<body>
+    <div class="app-container">
+        <!-- Header Toolbar -->
+        <header class="toolbar">
+            <div class="toolbar-left">
+                <h1 class="app-title">📝 Smart Blackboard</h1>
+            </div>
+            
+            <div class="toolbar-center">
+                <!-- Drawing Tools -->
+                <div class="tool-group">
+                    <button class="tool-btn active" data-tool="pen" title="Pen (P)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                            <path d="M2 2l7.586 7.586"></path>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" data-tool="eraser" title="Eraser (E)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 20H7L3 16l7.5-7.5L16 14l4 4-4 2z"></path>
+                            <path d="M16 8L8 16"></path>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" data-tool="line" title="Line (L)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="19" x2="19" y2="5"></line>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" data-tool="rectangle" title="Rectangle (R)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18"></rect>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" data-tool="circle" title="Circle (C)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="9"></circle>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" data-tool="text" title="Text (T)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                            <line x1="9" y1="20" x2="15" y2="20"></line>
+                            <line x1="12" y1="4" x2="12" y2="20"></line>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <!-- Color Picker -->
+                <div class="tool-group">
+                    <label class="color-picker-wrapper" title="Color">
+                        <input type="color" id="colorPicker" value="#ffffff">
+                        <div class="color-preview"></div>
+                    </label>
+                </div>
+                
+                <!-- Brush Size -->
+                <div class="tool-group">
+                    <label class="slider-wrapper" title="Brush Size">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="8"></circle>
+                        </svg>
+                        <input type="range" id="brushSize" min="1" max="50" value="3">
+                        <span id="brushSizeValue">3</span>
+                    </label>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <!-- Actions -->
+                <div class="tool-group">
+                    <button class="tool-btn" id="undoBtn" title="Undo (Ctrl+Z)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 7v6h6"></path>
+                            <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"></path>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="redoBtn" title="Redo (Ctrl+Y)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 7v6h-6"></path>
+                            <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"></path>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="clearBtn" title="Clear All">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <!-- File Operations -->
+                <div class="tool-group">
+                    <button class="tool-btn" id="saveBtn" title="Save Image">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="loadBtn" title="Load Image">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                    </button>
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                </div>
+            </div>
+            
+            <div class="toolbar-right">
+                <!-- Theme Selector -->
+                <div class="theme-selector">
+                    <button class="theme-btn active" data-theme="dark" title="Dark Sepia">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
+                        </svg>
+                    </button>
+                    <button class="theme-btn" data-theme="light" title="Light Sepia">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Canvas Container -->
+        <div class="canvas-container">
+            <canvas id="blackboard"></canvas>
         </div>
-        <!-- Pen Color Picker -->
-        <div class="me-2">
-          <input type="color" id="penColor" class="form-control form-control-sm  form-control-color" title="Pen Color" value="#ffffff">
-        </div>
-        <!-- Pen Width -->
-        <div class="me-2" style="width:100px;">
-          <input type="range" id="penWidth" class="form-range" min="1" max="20" value="2" title="Pen Width">
-        </div>
-        <!-- Tool Buttons -->
-        <div class="btn-group me-2" role="group" aria-label="Drawing Tools">
-          <button class="btn border btn-sm" id="penBtn" title="Free Draw"><i class="bi bi-pencil-fill"></i></button>
-          <button class="btn border btn-sm" id="eraserBtn" title="Eraser"><i class="bi bi-eraser-fill"></i></button>
-          <button class="btn border btn-sm" id="rectBtn" title="Rectangle"><i class="bi bi-square"></i></button>
-          <button class="btn border btn-sm" id="triBtn" title="Triangle"><i class="bi bi-triangle-fill"></i></button>
-          <button class="btn border btn-sm" id="circleBtn" title="Circle"><i class="bi bi-circle"></i></button>
-          <button class="btn border btn-sm" id="lineBtn" title="Line">Line</button>
-        </div>
-        <!-- Clear Page (opens modal) -->
-        <button class="btn btn-sm bg-danger-subtle me-2" id="clearPageBtn" title="Clear Current Page"><i class="bi bi-trash"></i></button>
-        <!-- Fullscreen Toggle -->
-        <button class="btn bg-light-subtle border btn-sm me-2" id="fullscreenBtn" title="Toggle Fullscreen"><i class="bi bi-arrows-fullscreen"></i></button>
-      </div>
-
-      <!-- Center: Page Navigation -->
-      <div class="mx-auto d-flex align-items-center">
-        <button class="btn btn-sm bg-primary-subtle me-2" id="prevPageBtn" title="Previous Page"><i class="bi bi-arrow-left"></i></button>
-        <span class="navbar-text me-2" id="pageIndicator">Page 1</span>
-        <button class="btn btn-sm bg-primary-subtle me-2" id="nextPageBtn" title="Next Page"><i class="bi bi-arrow-right"></i></button>
-        <button class="btn btn-sm bg-light-subtle" id="addPageBtn" title="Add New Page"><i class="bi bi-plus"></i> Add</button>
-      </div>
-
-      <!-- Right side: Export/Import & Current Time -->
-      <div class="d-flex align-items-center">
-        <button class="btn bg-primary-subtle btn-sm me-2" id="exportPdfBtn">Export PDF</button>
-        <button class="btn bg-primary-subtle btn-sm me-2" id="exportJsonBtn">Export JSON</button>
-        <button class="btn bg-primary-subtle btn-sm me-2" id="importJsonBtn">Import JSON</button>
-        <input type="file" id="importFileInput" accept=".json" style="display:none">
-        <div id="currentTime" class="ms-2"></div>
-      </div>
+        
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="toolStatus">Tool: Pen</span>
+            </div>
+            <div class="status-center">
+                <span id="positionStatus">Position: -</span>
+            </div>
+            <div class="status-right">
+                <span id="themeStatus">Theme: Dark Sepia</span>
+            </div>
+        </footer>
     </div>
-  </nav>
-
-  <!-- Bootstrap Modal for Clear Confirmation -->
-  <div class="modal fade" id="clearModal" tabindex="-1" aria-labelledby="clearModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content bg-dark text-light">
-        <div class="modal-header">
-          <h5 class="modal-title" id="clearModalLabel">Confirm Clear</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+    
+    <!-- Text Input Modal -->
+    <div id="textModal" class="modal">
+        <div class="modal-content">
+            <h3>Add Text</h3>
+            <input type="text" id="textInput" placeholder="Enter your text..." autocomplete="off">
+            <div class="modal-actions">
+                <button id="textOkBtn" class="btn btn-primary">OK</button>
+                <button id="textCancelBtn" class="btn btn-secondary">Cancel</button>
+            </div>
         </div>
-        <div class="modal-body">
-          Are you sure you want to clear the current page?
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn border btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-danger" id="confirmClearBtn">Yes, Clear</button>
-        </div>
-      </div>
     </div>
-  </div>
-
-  <!-- Required Libraries -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- jsPDF for PDF export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- FileSaver.js for JSON export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
-  <script>
-    // Global variables and defaults
-    let boardBackground = "#1c1c1c";
-    let pages = [];
-    let currentPageIndex = 0;
-    let drawing = false;
-    let currentStroke = null;
-    // Allowed tools: "pen", "eraser", "rectangle", "triangle", "circle", "line"
-    let currentTool = 'pen';
-    let currentColor = "#ffffff";
-    let currentLineWidth = 2;
-    const canvas = document.getElementById('drawCanvas');
-    const ctx = canvas.getContext('2d');
-
-    // Set initial canvas background style
-    canvas.style.background = boardBackground;
-
-    // Resize canvas to fill container
-    function resizeCanvas() {
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
-      renderCurrentPage();
-    }
-    window.addEventListener('resize', resizeCanvas);
-
-    // Initialize pages with one blank page
-    function initPages() {
-      pages = [];
-      currentPageIndex = 0;
-      pages.push({ strokes: [] });
-      updatePageIndicator();
-    }
-    function updatePageIndicator() {
-      $('#pageIndicator').text('Page ' + (currentPageIndex + 1));
-    }
-
-    // Render the current page (freehand strokes and shapes)
-    function renderCurrentPage() {
-      // Fill background
-      ctx.fillStyle = boardBackground;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const page = pages[currentPageIndex];
-      if (!page) return;
-      page.strokes.forEach(stroke => {
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.lineWidth = stroke.lineWidth;
-        ctx.strokeStyle = (stroke.tool === 'eraser') ? boardBackground : stroke.color;
-        ctx.beginPath();
-        if(stroke.tool === 'pen' || stroke.tool === 'eraser'){
-          stroke.points.forEach((pt, idx) => {
-            if(idx === 0){
-              ctx.moveTo(pt.x, pt.y);
-            } else {
-              ctx.lineTo(pt.x, pt.y);
-            }
-          });
-          ctx.stroke();
-        } else if(stroke.tool === 'rectangle'){
-          const x = Math.min(stroke.start.x, stroke.end.x);
-          const y = Math.min(stroke.start.y, stroke.end.y);
-          const w = Math.abs(stroke.end.x - stroke.start.x);
-          const h = Math.abs(stroke.end.y - stroke.start.y);
-          ctx.strokeRect(x, y, w, h);
-        } else if(stroke.tool === 'line'){
-          ctx.moveTo(stroke.start.x, stroke.start.y);
-          ctx.lineTo(stroke.end.x, stroke.end.y);
-          ctx.stroke();
-        } else if(stroke.tool === 'circle'){
-          const dx = stroke.end.x - stroke.start.x;
-          const dy = stroke.end.y - stroke.start.y;
-          const radius = Math.sqrt(dx*dx + dy*dy);
-          ctx.arc(stroke.start.x, stroke.start.y, radius, 0, 2 * Math.PI);
-          ctx.stroke();
-        } else if(stroke.tool === 'triangle'){
-          const x1 = Math.min(stroke.start.x, stroke.end.x);
-          const x2 = Math.max(stroke.start.x, stroke.end.x);
-          const y1 = Math.min(stroke.start.y, stroke.end.y);
-          const y2 = Math.max(stroke.start.y, stroke.end.y);
-          const midX = (stroke.start.x + stroke.end.x) / 2;
-          ctx.moveTo(x1, y2); // bottom left
-          ctx.lineTo(x2, y2); // bottom right
-          ctx.lineTo(midX, y1); // top center
-          ctx.closePath();
-          ctx.stroke();
-        }
-      });
-    }
-
-    // Start drawing or shape creation
-    function startDrawing(x, y) {
-      drawing = true;
-      if(currentTool === 'pen' || currentTool === 'eraser'){
-        currentStroke = {
-          tool: currentTool,
-          color: currentColor,
-          lineWidth: currentLineWidth,
-          points: [{ x, y }]
-        };
-      } else {
-        // For shapes: store start and end points (initially same)
-        currentStroke = {
-          tool: currentTool,
-          color: currentColor,
-          lineWidth: currentLineWidth,
-          start: { x, y },
-          end: { x, y }
-        };
-      }
-      pages[currentPageIndex].strokes.push(currentStroke);
-    }
     
-    // Update drawing or shape preview
-    function draw(x, y) {
-      if(!drawing) return;
-      if(currentTool === 'pen' || currentTool === 'eraser'){
-        currentStroke.points.push({ x, y });
-        ctx.beginPath();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.lineWidth = currentLineWidth;
-        ctx.strokeStyle = (currentTool === 'eraser') ? boardBackground : currentColor;
-        const pts = currentStroke.points;
-        if(pts.length > 1){
-          ctx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
-          ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
-          ctx.stroke();
-        }
-      } else {
-        // For shapes, update the end point and re-render entire page to show preview
-        currentStroke.end = { x, y };
-        renderCurrentPage();
-      }
-    }
-    
-    // End drawing or shape creation
-    function stopDrawing() {
-      drawing = false;
-      currentStroke = null;
-    }
-    
-    // Get canvas-relative coordinates
-    function getCanvasPos(e) {
-      const rect = canvas.getBoundingClientRect();
-      let x, y;
-      if(e.touches && e.touches.length){
-        x = e.touches[0].clientX - rect.left;
-        y = e.touches[0].clientY - rect.top;
-      } else {
-        x = e.clientX - rect.left;
-        y = e.clientY - rect.top;
-      }
-      return { x, y };
-    }
-    
-    // Export current work as a PDF file (each page is a PDF page)
-    async function exportPDF() {
-      const { jsPDF } = window.jspdf;
-      let pdf = new jsPDF('landscape', 'pt', [canvas.width, canvas.height]);
-      for(let i = 0; i < pages.length; i++) {
-        let offscreen = document.createElement('canvas');
-        offscreen.width = canvas.width;
-        offscreen.height = canvas.height;
-        let offCtx = offscreen.getContext('2d');
-        offCtx.fillStyle = boardBackground;
-        offCtx.fillRect(0, 0, offscreen.width, offscreen.height);
-        pages[i].strokes.forEach(stroke => {
-          offCtx.lineCap = 'round';
-          offCtx.lineJoin = 'round';
-          offCtx.lineWidth = stroke.lineWidth;
-          offCtx.strokeStyle = (stroke.tool === 'eraser') ? boardBackground : stroke.color;
-          offCtx.beginPath();
-          if(stroke.tool === 'pen' || stroke.tool === 'eraser'){
-            stroke.points.forEach((pt, idx) => {
-              if(idx === 0){
-                offCtx.moveTo(pt.x, pt.y);
-              } else {
-                offCtx.lineTo(pt.x, pt.y);
-              }
-            });
-          } else if(stroke.tool === 'rectangle'){
-            const x = Math.min(stroke.start.x, stroke.end.x);
-            const y = Math.min(stroke.start.y, stroke.end.y);
-            const w = Math.abs(stroke.end.x - stroke.start.x);
-            const h = Math.abs(stroke.end.y - stroke.start.y);
-            offCtx.strokeRect(x, y, w, h);
-          } else if(stroke.tool === 'line'){
-            offCtx.moveTo(stroke.start.x, stroke.start.y);
-            offCtx.lineTo(stroke.end.x, stroke.end.y);
-          } else if(stroke.tool === 'circle'){
-            const dx = stroke.end.x - stroke.start.x;
-            const dy = stroke.end.y - stroke.start.y;
-            const radius = Math.sqrt(dx*dx + dy*dy);
-            offCtx.arc(stroke.start.x, stroke.start.y, radius, 0, 2 * Math.PI);
-          } else if(stroke.tool === 'triangle'){
-            const x1 = Math.min(stroke.start.x, stroke.end.x);
-            const x2 = Math.max(stroke.start.x, stroke.end.x);
-            const y1 = Math.min(stroke.start.y, stroke.end.y);
-            const y2 = Math.max(stroke.start.y, stroke.end.y);
-            const midX = (stroke.start.x + stroke.end.x) / 2;
-            offCtx.moveTo(x1, y2);
-            offCtx.lineTo(x2, y2);
-            offCtx.lineTo(midX, y1);
-            offCtx.closePath();
-          }
-          offCtx.stroke();
-        });
-        let imgData = offscreen.toDataURL('image/jpeg', 1.0);
-        if(i > 0){
-          pdf.addPage();
-        }
-        pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
-      }
-      pdf.save('blackboard.pdf');
-    }
-    
-    // Canvas event handlers
-    $(canvas).on('mousedown touchstart', function(e){
-      e.preventDefault();
-      const pos = getCanvasPos(e);
-      startDrawing(pos.x, pos.y);
-    });
-    $(canvas).on('mousemove touchmove', function(e){
-      e.preventDefault();
-      const pos = getCanvasPos(e);
-      draw(pos.x, pos.y);
-    });
-    $(canvas).on('mouseup touchend mouseleave', function(e){
-      e.preventDefault();
-      stopDrawing();
-    });
-    
-    // Update current time display in navbar every second
-    function updateTime(){
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString();
-      $('#currentTime').text(timeStr);
-    }
-    setInterval(updateTime, 1000);
-    updateTime();
-    
-    // Toolbar and modal event handlers
-    $(document).ready(function(){
-      initPages();
-      resizeCanvas();
-      
-      // Tool selection: free-draw
-      $('#penBtn').on('click', function(){
-        currentTool = 'pen';
-        $('.btn-group button').removeClass('btn-primary').addClass('border');
-        $(this).removeClass('border').addClass('btn-primary');
-      });
-      // Eraser
-      $('#eraserBtn').on('click', function(){
-        currentTool = 'eraser';
-        $('.btn-group button').removeClass('btn-primary').addClass('border');
-        $(this).removeClass('border').addClass('btn-primary');
-      });
-      // Rectangle
-      $('#rectBtn').on('click', function(){
-        currentTool = 'rectangle';
-        $('.btn-group button').removeClass('btn-primary').addClass('border');
-        $(this).removeClass('border').addClass('btn-primary');
-      });
-      // Triangle
-      $('#triBtn').on('click', function(){
-        currentTool = 'triangle';
-        $('.btn-group button').removeClass('btn-primary').addClass('border');
-        $(this).removeClass('border').addClass('btn-primary');
-      });
-      // Circle
-      $('#circleBtn').on('click', function(){
-        currentTool = 'circle';
-        $('.btn-group button').removeClass('btn-primary').addClass('border');
-        $(this).removeClass('border').addClass('btn-primary');
-      });
-      // Line
-      $('#lineBtn').on('click', function(){
-        currentTool = 'line';
-        $('.btn-group button').removeClass('btn-primary').addClass('border');
-        $(this).removeClass('border').addClass('btn-primary');
-      });
-      
-      // Background color change
-      $('#bgColor').on('change', function(){
-        boardBackground = $(this).val();
-        canvas.style.background = boardBackground;
-        renderCurrentPage();
-      });
-      // Pen color and width controls
-      $('#penColor').on('change', function(){
-        currentColor = $(this).val();
-      });
-      $('#penWidth').on('change', function(){
-        currentLineWidth = parseInt($(this).val());
-      });
-      
-      // Clear Page: show Bootstrap modal
-      $('#clearPageBtn').on('click', function(){
-        const clearModal = new bootstrap.Modal(document.getElementById('clearModal'));
-        clearModal.show();
-      });
-      // Confirm clear page action from modal
-      $('#confirmClearBtn').on('click', function(){
-        pages[currentPageIndex].strokes = [];
-        renderCurrentPage();
-        bootstrap.Modal.getInstance(document.getElementById('clearModal')).hide();
-      });
-      
-      // Fullscreen toggle button
-      $('#fullscreenBtn').on('click', function(){
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(err => {
-            alert(`Error attempting to enable full-screen mode: ${err.message}`);
-          });
-        } else {
-          document.exitFullscreen();
-        }
-      });
-      
-      // Page navigation
-      $('#addPageBtn').on('click', function(){
-        pages.push({ strokes: [] });
-        currentPageIndex = pages.length - 1;
-        updatePageIndicator();
-        renderCurrentPage();
-      });
-      $('#prevPageBtn').on('click', function(){
-        if(currentPageIndex > 0){
-          currentPageIndex--;
-          updatePageIndicator();
-          renderCurrentPage();
-        }
-      });
-      $('#nextPageBtn').on('click', function(){
-        if(currentPageIndex < pages.length - 1){
-          currentPageIndex++;
-          updatePageIndicator();
-          renderCurrentPage();
-        }
-      });
-      
-      // Export PDF
-      $('#exportPdfBtn').on('click', exportPDF);
-      
-      // Export JSON
-      $('#exportJsonBtn').on('click', function(){
-        const dataStr = JSON.stringify(pages);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        saveAs(blob, "blackboard.json");
-      });
-      // Import JSON
-      $('#importJsonBtn').on('click', function(){
-        $('#importFileInput').click();
-      });
-      $('#importFileInput').on('change', function(e){
-        if(e.target.files && e.target.files[0]){
-          const reader = new FileReader();
-          reader.onload = function(ev){
-            try {
-              const importedPages = JSON.parse(ev.target.result);
-              if(Array.isArray(importedPages)){
-                pages = importedPages;
-                currentPageIndex = 0;
-                updatePageIndicator();
-                renderCurrentPage();
-              } else {
-                alert("Invalid file format");
-              }
-            } catch(err){
-              alert("Error reading file: " + err);
-            }
-          };
-          reader.readAsText(e.target.files[0]);
-        }
-      });
-    });
-  </script>
+    <script src="script.js"></script>
 </body>
 </html>
