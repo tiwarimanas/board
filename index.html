@@ -116,366 +116,360 @@
   <!-- Fabric.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
-  <script>
-    // Global state
-    let boardBackground = "#1c1c1c";
-    let pages = []; // each page: { json: <fabric json>, bg: <color> }
-    let currentPageIndex = 0;
+<script>
+  // Global state
+  let boardBackground = "#1c1c1c";
+  let pages = []; // each page: { json: <fabric json>, bg: <color> }
+  let currentPageIndex = 0;
 
-    // Tools: "pen", "eraser", "rectangle", "triangle", "circle", "line"
-    let currentTool = 'pen';
-    let currentColor = "#ffffff";
-    let currentLineWidth = 2;
+  // Tools: "pen", "eraser", "rectangle", "triangle", "circle", "line"
+  let currentTool = 'pen';
+  let currentColor = "#ffffff";
+  let currentLineWidth = 2;
 
-    // Fabric canvas
-    const fabricCanvas = new fabric.Canvas('drawCanvas', {
-      backgroundColor: boardBackground,
-      selection: true,
-      preserveObjectStacking: true
-    });
+  // Right-click erase state
+  const RMB_ERASER_MIN = 22; // reasonable big eraser
+  let rmbErasing = false;
 
-    function resizeCanvas() {
-      const container = document.getElementById('canvasContainer');
-      fabricCanvas.setWidth(container.clientWidth);
-      fabricCanvas.setHeight(container.clientHeight);
-      fabricCanvas.requestRenderAll();
+  // Fabric canvas
+  const fabricCanvas = new fabric.Canvas('drawCanvas', {
+    backgroundColor: boardBackground,
+    selection: true,
+    preserveObjectStacking: true,
+    fireRightClick: true,       // enable RMB events
+    stopContextMenu: true       // prevent context menu
+  });
+
+  function resizeCanvas() {
+    const container = document.getElementById('canvasContainer');
+    fabricCanvas.setWidth(container.clientWidth);
+    fabricCanvas.setHeight(container.clientHeight);
+    fabricCanvas.requestRenderAll();
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  // Build a circular SVG cursor data URL with center hotspot
+  function makeCircleCursor(diameter, strokeColor = '#ffffff', strokeWidth = 2, fill = 'rgba(0,0,0,0)') {
+    const r = Math.max(1, (diameter - strokeWidth) / 2);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${diameter}" height="${diameter}" viewBox="0 0 ${diameter} ${diameter}">
+      <circle cx="${diameter/2}" cy="${diameter/2}" r="${r}" fill="${fill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
+    </svg>`;
+    return 'data:image/svg+xml;base64,' + btoa(svg);
+  }
+
+  function applyDrawingCursor(width, outlineColor = '#ffffff') {
+    const d = Math.max(8, Math.round(width)); // diameter
+    const url = makeCircleCursor(d, outlineColor, 2, 'rgba(0,0,0,0)');
+    // center hotspot uses d/2, fallback to pointer
+    fabricCanvas.freeDrawingCursor = `url(${url}) ${Math.round(d/2)} ${Math.round(d/2)}, pointer`;
+    // non-drawing hover cursor
+    fabricCanvas.hoverCursor = 'pointer';
+    fabricCanvas.requestRenderAll();
+  }
+
+  // Free drawing brush setup
+  function ensureFreeDrawingBrush() {
+    if (!fabricCanvas.freeDrawingBrush) {
+      fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
     }
-    window.addEventListener('resize', resizeCanvas);
+    const isErase = (currentTool === 'eraser');
+    fabricCanvas.freeDrawingBrush.color = isErase
+      ? (fabricCanvas.backgroundColor || boardBackground)
+      : currentColor;
+    fabricCanvas.freeDrawingBrush.width = currentLineWidth;
+    applyDrawingCursor(fabricCanvas.freeDrawingBrush.width);
+  }
 
-    // Free drawing brush
-    function ensureFreeDrawingBrush() {
-      if (!fabricCanvas.freeDrawingBrush) {
-        fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
-      }
-      fabricCanvas.freeDrawingBrush.color = (currentTool === 'eraser')
-        ? (fabricCanvas.backgroundColor || boardBackground)
-        : currentColor;
-      fabricCanvas.freeDrawingBrush.width = currentLineWidth;
+  // Tool switching
+  function setTool(tool) {
+    currentTool = tool;
+    const drawingTool = (tool === 'pen' || tool === 'eraser');
+    fabricCanvas.isDrawingMode = drawingTool;
+    if (drawingTool) ensureFreeDrawingBrush();
+    $('.btn-group button').removeClass('btn-primary').addClass('border');
+    const map = { pen:'#penBtn', eraser:'#eraserBtn', rectangle:'#rectBtn', triangle:'#triBtn', circle:'#circleBtn', line:'#lineBtn' };
+    $(map[tool]).removeClass('border').addClass('btn-primary');
+    if (!drawingTool) {
+      // shape tools use pointer hover; circular cursor only when drawing
+      fabricCanvas.hoverCursor = 'pointer';
+    } else {
+      applyDrawingCursor(fabricCanvas.freeDrawingBrush?.width || currentLineWidth);
     }
+  }
 
-    // Tool switching
-    function setTool(tool) {
-      currentTool = tool;
-      if (tool === 'pen' || tool === 'eraser') {
-        fabricCanvas.isDrawingMode = true;
-        ensureFreeDrawingBrush();
-      } else {
-        fabricCanvas.isDrawingMode = false;
-      }
-      $('.btn-group button').removeClass('btn-primary').addClass('border');
-      const map = {
-        pen: '#penBtn',
-        eraser: '#eraserBtn',
-        rectangle: '#rectBtn',
-        triangle: '#triBtn',
-        circle: '#circleBtn',
-        line: '#lineBtn'
-      };
-      $(map[tool]).removeClass('border').addClass('btn-primary');
+  // Page helpers
+  function updatePageIndicator() { $('#pageIndicator').text('Page ' + (currentPageIndex + 1)); }
+  function snapshotCurrentPage() {
+    if (!pages[currentPageIndex]) return;
+    pages[currentPageIndex].json = fabricCanvas.toJSON();
+    pages[currentPageIndex].bg = fabricCanvas.backgroundColor || boardBackground;
+  }
+  function renderPage(index) {
+    const page = pages[index];
+    fabricCanvas.backgroundColor = page?.bg || boardBackground;
+    if (page && page.json) {
+      fabricCanvas.loadFromJSON(page.json, () => fabricCanvas.renderAll());
+    } else {
+      fabricCanvas.clear();
+      fabricCanvas.setBackgroundColor(page?.bg || boardBackground, fabricCanvas.renderAll.bind(fabricCanvas));
     }
+  }
+  function addNewBlankPage() {
+    pages.push({ json: { objects: [], background: boardBackground }, bg: boardBackground });
+    currentPageIndex = pages.length - 1;
+    renderPage(currentPageIndex);
+    updatePageIndicator();
+  }
+  function registerChangeTracking() {
+    const snapshot = () => snapshotCurrentPage();
+    fabricCanvas.on('object:added', snapshot);
+    fabricCanvas.on('object:modified', snapshot);
+    fabricCanvas.on('object:removed', snapshot);
+    fabricCanvas.on('path:created', snapshot);
+  }
 
-    // Page helpers
-    function updatePageIndicator() {
-      $('#pageIndicator').text('Page ' + (currentPageIndex + 1));
-    }
+  // Shape drawing state
+  let drawingShape = false;
+  let shapeObj = null;
+  let startX = 0, startY = 0;
 
-    function snapshotCurrentPage() {
-      if (!pages[currentPageIndex]) return;
-      pages[currentPageIndex].json = fabricCanvas.toJSON();
-      pages[currentPageIndex].bg = fabricCanvas.backgroundColor || boardBackground;
-    }
+  function startShape(pointer) {
+    drawingShape = true;
+    startX = pointer.x;
+    startY = pointer.y;
 
-    function renderPage(index) {
-      const page = pages[index];
-      // Always keep canvas size from container; Fabric JSON may not restore size
-      // So set background first, then load objects
-      fabricCanvas.backgroundColor = page?.bg || boardBackground;
-      if (page && page.json) {
-        fabricCanvas.loadFromJSON(page.json, () => {
-          fabricCanvas.renderAll();
-        });
-      } else {
-        fabricCanvas.clear();
-        fabricCanvas.setBackgroundColor(page?.bg || boardBackground, fabricCanvas.renderAll.bind(fabricCanvas));
-      }
-    }
+    const common = {
+      left: startX, top: startY,
+      stroke: currentColor, strokeWidth: currentLineWidth,
+      fill: 'rgba(0,0,0,0)', selectable: true, objectCaching: false
+    };
 
-    function addNewBlankPage() {
-      pages.push({ json: { objects: [], background: boardBackground }, bg: boardBackground });
-      currentPageIndex = pages.length - 1;
-      renderPage(currentPageIndex);
-      updatePageIndicator();
-    }
+    if (currentTool === 'rectangle') shapeObj = new fabric.Rect({ ...common, width: 1, height: 1, originX: 'left', originY: 'top' });
+    else if (currentTool === 'circle') shapeObj = new fabric.Circle({ ...common, radius: 1, originX: 'center', originY: 'center' });
+    else if (currentTool === 'triangle') shapeObj = new fabric.Triangle({ ...common, width: 1, height: 1, originX: 'left', originY: 'top' });
+    else if (currentTool === 'line') shapeObj = new fabric.Line([startX, startY, startX, startY], { stroke: currentColor, strokeWidth: currentLineWidth, selectable: true, evented: true });
 
-    // Change tracking to auto-snapshot
-    function registerChangeTracking() {
-      const snapshot = () => snapshotCurrentPage();
-      fabricCanvas.on('object:added', snapshot);
-      fabricCanvas.on('object:modified', snapshot);
-      fabricCanvas.on('object:removed', snapshot);
-      fabricCanvas.on('path:created', snapshot);
-    }
+    if (shapeObj) fabricCanvas.add(shapeObj);
+  }
 
-    // Shape drawing state
-    let drawingShape = false;
-    let shapeObj = null;
-    let startX = 0, startY = 0;
+  function updateShape(pointer) {
+    if (!drawingShape || !shapeObj) return;
+    const x = pointer.x, y = pointer.y;
 
-    function startShape(pointer) {
-      drawingShape = true;
-      startX = pointer.x;
-      startY = pointer.y;
-
-      const common = {
-        left: startX,
-        top: startY,
-        stroke: currentColor,
-        strokeWidth: currentLineWidth,
-        fill: 'rgba(0,0,0,0)',
-        selectable: true,
-        objectCaching: false
-      };
-
-      if (currentTool === 'rectangle') {
-        shapeObj = new fabric.Rect({ ...common, width: 1, height: 1, originX: 'left', originY: 'top' });
-      } else if (currentTool === 'circle') {
-        shapeObj = new fabric.Circle({ ...common, radius: 1, originX: 'center', originY: 'center' });
-      } else if (currentTool === 'triangle') {
-        shapeObj = new fabric.Triangle({ ...common, width: 1, height: 1, originX: 'left', originY: 'top' });
-      } else if (currentTool === 'line') {
-        shapeObj = new fabric.Line([startX, startY, startX, startY], {
-          stroke: currentColor,
-          strokeWidth: currentLineWidth,
-          selectable: true,
-          evented: true
-        });
-      }
-
-      if (shapeObj) {
-        fabricCanvas.add(shapeObj);
-      }
-    }
-
-    function updateShape(pointer) {
-      if (!drawingShape || !shapeObj) return;
-      const x = pointer.x;
-      const y = pointer.y;
-
-      if (shapeObj.type === 'rect' || shapeObj.type === 'triangle') {
-        const left = Math.min(startX, x);
-        const top = Math.min(startY, y);
-        const width = Math.abs(x - startX);
-        const height = Math.abs(y - startY);
-        shapeObj.set({ left, top, width, height });
-      } else if (shapeObj.type === 'circle') {
-        const dx = x - startX;
-        const dy = y - startY;
-        const r = Math.sqrt(dx * dx + dy * dy);
-        shapeObj.set({ left: startX, top: startY, radius: r });
-      } else if (shapeObj.type === 'line') {
-        shapeObj.set({ x2: x, y2: y });
-      }
-
-      shapeObj.setCoords();
-      fabricCanvas.requestRenderAll();
+    if (shapeObj.type === 'rect' || shapeObj.type === 'triangle') {
+      const left = Math.min(startX, x), top = Math.min(startY, y);
+      const width = Math.abs(x - startX), height = Math.abs(y - startY);
+      shapeObj.set({ left, top, width, height });
+    } else if (shapeObj.type === 'circle') {
+      const dx = x - startX, dy = y - startY;
+      const r = Math.sqrt(dx*dx + dy*dy);
+      shapeObj.set({ left: startX, top: startY, radius: r });
+    } else if (shapeObj.type === 'line') {
+      shapeObj.set({ x2: x, y2: y });
     }
 
-    function endShape() {
-      drawingShape = false;
-      shapeObj = null;
+    shapeObj.setCoords();
+    fabricCanvas.requestRenderAll();
+  }
+
+  function endShape() {
+    drawingShape = false;
+    shapeObj = null;
+    snapshotCurrentPage();
+  }
+
+  // Mouse handlers for shapes
+  fabricCanvas.on('mouse:down', function (opt) {
+    // Right-click erase: temporarily switch to drawing brush that uses background color and big width
+    if (opt.e && opt.e.button === 2) {
+      rmbErasing = true;
+      const bg = fabricCanvas.backgroundColor || boardBackground;
+      const w = Math.max(RMB_ERASER_MIN, currentLineWidth * 3);
+      const wasDrawing = fabricCanvas.isDrawingMode;
+      fabricCanvas.__prevWasDrawing = wasDrawing;
+      fabricCanvas.isDrawingMode = true;
+      ensureFreeDrawingBrush();
+      fabricCanvas.freeDrawingBrush.color = bg;
+      fabricCanvas.freeDrawingBrush.width = w;
+      applyDrawingCursor(w); // show big eraser circle
+      return; // RMB path creation handled by Fabric in drawing mode
+    }
+
+    if (fabricCanvas.isDrawingMode) return; // pen/eraser handled by Fabric
+    const pointer = fabricCanvas.getPointer(opt.e);
+    startShape(pointer);
+  });
+
+  fabricCanvas.on('mouse:move', function (opt) {
+    if (fabricCanvas.isDrawingMode) return;
+    if (!drawingShape) return;
+    const pointer = fabricCanvas.getPointer(opt.e);
+    updateShape(pointer);
+  });
+
+  fabricCanvas.on('mouse:up', function () {
+    if (rmbErasing) {
+      rmbErasing = false;
+      // restore tool mode and cursor
+      fabricCanvas.isDrawingMode = (currentTool === 'pen' || currentTool === 'eraser');
+      ensureFreeDrawingBrush();
+      applyDrawingCursor(fabricCanvas.freeDrawingBrush?.width || currentLineWidth);
       snapshotCurrentPage();
+      return;
     }
+    if (fabricCanvas.isDrawingMode) return;
+    if (!drawingShape) return;
+    endShape();
+  });
 
-    // Mouse handlers for shape tools
-    fabricCanvas.on('mouse:down', function (opt) {
-      if (fabricCanvas.isDrawingMode) return;
-      const pointer = fabricCanvas.getPointer(opt.e);
-      startShape(pointer);
+  // Toolbar and modal event handlers
+  $(document).ready(function(){
+    // Init canvas
+    resizeCanvas();
+    // Start with one blank page
+    pages = [];
+    addNewBlankPage();
+    registerChangeTracking();
+    setTool('pen');
+
+    // Tool selection
+    $('#penBtn').on('click', () => setTool('pen'));
+    $('#eraserBtn').on('click', () => setTool('eraser'));
+    $('#rectBtn').on('click', () => setTool('rectangle'));
+    $('#triBtn').on('click', () => setTool('triangle'));
+    $('#circleBtn').on('click', () => setTool('circle'));
+    $('#lineBtn').on('click', () => setTool('line'));
+
+    // Background color change
+    $('#bgColor').on('change', function(){
+      boardBackground = $(this).val();
+      fabricCanvas.setBackgroundColor(boardBackground, fabricCanvas.renderAll.bind(fabricCanvas));
+      ensureFreeDrawingBrush();
+      snapshotCurrentPage();
     });
-    fabricCanvas.on('mouse:move', function (opt) {
-      if (fabricCanvas.isDrawingMode) return;
-      if (!drawingShape) return;
-      const pointer = fabricCanvas.getPointer(opt.e);
-      updateShape(pointer);
+
+    // Pen color and width controls
+    $('#penColor').on('change', function(){
+      currentColor = $(this).val();
+      ensureFreeDrawingBrush();
     });
-    fabricCanvas.on('mouse:up', function () {
-      if (fabricCanvas.isDrawingMode) return;
-      if (!drawingShape) return;
-      endShape();
+    $('#penWidth').on('change', function(){
+      currentLineWidth = parseInt($(this).val());
+      ensureFreeDrawingBrush();
     });
 
-    // Toolbar and modal event handlers
-    $(document).ready(function(){
-      // Init canvas
-      resizeCanvas();
-      // Start with one blank page
-      pages = [];
-      addNewBlankPage();
-      registerChangeTracking();
-      setTool('pen');
+    // Clear Page modal
+    $('#clearPageBtn').on('click', function(){
+      const clearModal = new bootstrap.Modal(document.getElementById('clearModal'));
+      clearModal.show();
+    });
+    $('#confirmClearBtn').on('click', function(){
+      const bg = fabricCanvas.backgroundColor || boardBackground;
+      fabricCanvas.getObjects().forEach(obj => fabricCanvas.remove(obj));
+      fabricCanvas.setBackgroundColor(bg, fabricCanvas.renderAll.bind(fabricCanvas));
+      snapshotCurrentPage();
+      bootstrap.Modal.getInstance(document.getElementById('clearModal')).hide();
+    });
 
-      // Tool selection
-      $('#penBtn').on('click', () => setTool('pen'));
-      $('#eraserBtn').on('click', () => setTool('eraser'));
-      $('#rectBtn').on('click', () => setTool('rectangle'));
-      $('#triBtn').on('click', () => setTool('triangle'));
-      $('#circleBtn').on('click', () => setTool('circle'));
-      $('#lineBtn').on('click', () => setTool('line'));
+    // Fullscreen toggle
+    $('#fullscreenBtn').on('click', function(){
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => { alert(`Error attempting to enable full-screen mode: ${err.message}`); });
+      } else {
+        document.exitFullscreen();
+      }
+    });
 
-      // Background color change
-      $('#bgColor').on('change', function(){
-        boardBackground = $(this).val();
-        fabricCanvas.setBackgroundColor(boardBackground, fabricCanvas.renderAll.bind(fabricCanvas));
-        ensureFreeDrawingBrush();
+    // Page navigation
+    $('#addPageBtn').on('click', function(){ snapshotCurrentPage(); addNewBlankPage(); });
+    $('#prevPageBtn').on('click', function(){
+      if (currentPageIndex > 0) {
         snapshotCurrentPage();
-      });
-
-      // Pen color and width controls
-      $('#penColor').on('change', function(){
-        currentColor = $(this).val();
-        ensureFreeDrawingBrush();
-      });
-      $('#penWidth').on('change', function(){
-        currentLineWidth = parseInt($(this).val());
-        ensureFreeDrawingBrush();
-      });
-
-      // Clear Page modal
-      $('#clearPageBtn').on('click', function(){
-        const clearModal = new bootstrap.Modal(document.getElementById('clearModal'));
-        clearModal.show();
-      });
-      $('#confirmClearBtn').on('click', function(){
-        // Keep background, remove objects
-        const bg = fabricCanvas.backgroundColor || boardBackground;
-        fabricCanvas.getObjects().forEach(obj => fabricCanvas.remove(obj));
-        fabricCanvas.setBackgroundColor(bg, fabricCanvas.renderAll.bind(fabricCanvas));
+        currentPageIndex--;
+        renderPage(currentPageIndex);
+        updatePageIndicator();
+      }
+    });
+    $('#nextPageBtn').on('click', function(){
+      if (currentPageIndex < pages.length - 1) {
         snapshotCurrentPage();
-        bootstrap.Modal.getInstance(document.getElementById('clearModal')).hide();
-      });
+        currentPageIndex++;
+        renderPage(currentPageIndex);
+        updatePageIndicator();
+      }
+    });
 
-      // Fullscreen toggle
-      $('#fullscreenBtn').on('click', function(){
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(err => {
-            alert(`Error attempting to enable full-screen mode: ${err.message}`);
-          });
-        } else {
-          document.exitFullscreen();
-        }
-      });
+    // Export PDF
+    $('#exportPdfBtn').on('click', async function(){
+      snapshotCurrentPage();
+      const { jsPDF } = window.jspdf;
+      const w = fabricCanvas.getWidth(), h = fabricCanvas.getHeight();
+      const pdf = new jsPDF('landscape', 'pt', [w, h]);
 
-      // Page navigation
-      $('#addPageBtn').on('click', function(){
-        snapshotCurrentPage();
-        addNewBlankPage();
-      });
-      $('#prevPageBtn').on('click', function(){
-        if (currentPageIndex > 0) {
-          snapshotCurrentPage();
-          currentPageIndex--;
-          renderPage(currentPageIndex);
-          updatePageIndicator();
-        }
-      });
-      $('#nextPageBtn').on('click', function(){
-        if (currentPageIndex < pages.length - 1) {
-          snapshotCurrentPage();
-          currentPageIndex++;
-          renderPage(currentPageIndex);
-          updatePageIndicator();
-        }
-      });
+      // Save current state
+      const savedIndex = currentPageIndex;
+      const savedJSON = fabricCanvas.toJSON();
+      const savedBG = fabricCanvas.backgroundColor;
 
-      // Export PDF
-      $('#exportPdfBtn').on('click', async function(){
-        snapshotCurrentPage();
-        const { jsPDF } = window.jspdf;
-        const w = fabricCanvas.getWidth();
-        const h = fabricCanvas.getHeight();
-        const pdf = new jsPDF('landscape', 'pt', [w, h]);
-
-        // Save current state to restore later
-        const savedIndex = currentPageIndex;
-        const savedJSON = fabricCanvas.toJSON();
-        const savedBG = fabricCanvas.backgroundColor;
-
-        for (let i = 0; i < pages.length; i++) {
-          // Load page i
-          const page = pages[i];
-          await new Promise((resolve) => {
-            fabricCanvas.setBackgroundColor(page.bg || boardBackground, () => {
-              fabricCanvas.loadFromJSON(page.json || { objects: [] }, () => {
-                fabricCanvas.renderAll();
-                resolve();
-              });
-            });
-          });
-
-          // Export to image
-          const dataUrl = fabricCanvas.toDataURL({ format: 'jpeg', quality: 1.0 });
-          if (i > 0) pdf.addPage();
-          pdf.addImage(dataUrl, 'JPEG', 0, 0, w, h);
-        }
-
-        // Restore previous page
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
         await new Promise((resolve) => {
-          fabricCanvas.setBackgroundColor(savedBG || boardBackground, () => {
-            fabricCanvas.loadFromJSON(savedJSON, () => {
-              fabricCanvas.renderAll();
-              currentPageIndex = savedIndex;
-              updatePageIndicator();
-              resolve();
+          fabricCanvas.setBackgroundColor(page.bg || boardBackground, () => {
+            fabricCanvas.loadFromJSON(page.json || { objects: [] }, () => {
+              fabricCanvas.renderAll(); resolve();
             });
           });
         });
-
-        pdf.save('blackboard.pdf');
-      });
-
-      // Export JSON
-      $('#exportJsonBtn').on('click', function(){
-        snapshotCurrentPage();
-        const dataStr = JSON.stringify(pages);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        saveAs(blob, "blackboard.json");
-      });
-
-      // Import JSON
-      $('#importJsonBtn').on('click', function(){
-        $('#importFileInput').click();
-      });
-      $('#importFileInput').on('change', function(e){
-        if(e.target.files && e.target.files[0]){
-          const reader = new FileReader();
-          reader.onload = function(ev){
-            try {
-              const importedPages = JSON.parse(ev.target.result);
-              if(Array.isArray(importedPages)){
-                pages = importedPages;
-                currentPageIndex = 0;
-                renderPage(currentPageIndex);
-                updatePageIndicator();
-              } else {
-                alert("Invalid file format");
-              }
-            } catch(err){
-              alert("Error reading file: " + err);
-            }
-          };
-          reader.readAsText(e.target.files[0]);
-        }
-      });
-
-      // Current time
-      function updateTime(){
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString();
-        $('#currentTime').text(timeStr);
+        const dataUrl = fabricCanvas.toDataURL({ format: 'jpeg', quality: 1.0 });
+        if (i > 0) pdf.addPage();
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, w, h);
       }
-      setInterval(updateTime, 1000);
-      updateTime();
+
+      // Restore
+      await new Promise((resolve) => {
+        fabricCanvas.setBackgroundColor(savedBG || boardBackground, () => {
+          fabricCanvas.loadFromJSON(savedJSON, () => {
+            fabricCanvas.renderAll(); currentPageIndex = savedIndex; updatePageIndicator(); resolve();
+          });
+        });
+      });
+
+      pdf.save('blackboard.pdf');
     });
-  </script>
+
+    // Export JSON
+    $('#exportJsonBtn').on('click', function(){
+      snapshotCurrentPage();
+      const dataStr = JSON.stringify(pages);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      saveAs(blob, "blackboard.json");
+    });
+
+    // Import JSON
+    $('#importJsonBtn').on('click', function(){ $('#importFileInput').click(); });
+    $('#importFileInput').on('change', function(e){
+      if(e.target.files && e.target.files[0]){
+        const reader = new FileReader();
+        reader.onload = function(ev){
+          try {
+            const importedPages = JSON.parse(ev.target.result);
+            if(Array.isArray(importedPages)){
+              pages = importedPages;
+              currentPageIndex = 0;
+              renderPage(currentPageIndex);
+              updatePageIndicator();
+            } else alert("Invalid file format");
+          } catch(err){ alert("Error reading file: " + err); }
+        };
+        reader.readAsText(e.target.files[0]);
+      }
+    });
+
+    // Current time
+    function updateTime(){ $('#currentTime').text(new Date().toLocaleTimeString()); }
+    setInterval(updateTime, 1000); updateTime();
+  });
+</script>
+
 </body>
 </html>
