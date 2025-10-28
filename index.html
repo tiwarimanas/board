@@ -1,3 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Smart Blackboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-theme="sepia-dark">
+    <noscript>
+      <div class="no-js">This app requires JavaScript to run.</div>
+    </noscript>
+
+    <div class="app">
+      <header class="toolbar" role="toolbar" aria-label="Blackboard toolbar">
+        <div class="group" aria-label="Tools">
+          <button id="tool-pen" class="tool-btn" data-tool="pen" title="Pen (P)" aria-pressed="true">Pen</button>
+          <button id="tool-highlighter" class="tool-btn" data-tool="highlighter" title="Highlighter (H)">Highlighter</button>
+          <button id="tool-eraser" class="tool-btn" data-tool="eraser" title="Eraser (E)">Eraser</button>
+          <button id="tool-line" class="tool-btn" data-tool="line" title="Line (L)">Line</button>
+          <button id="tool-rect" class="tool-btn" data-tool="rect" title="Rectangle (R)">Rect</button>
+          <button id="tool-text" class="tool-btn" data-tool="text" title="Text (T)">Text</button>
+        </div>
+
+        <div class="group" aria-label="Stroke controls">
+          <label class="control" title="Stroke color">
+            <span>Color</span>
+            <input id="color" type="color" value="#1f4b3f" />
+          </label>
+          <label class="control" title="Brush size">
+            <span>Size</span>
+            <input id="size" type="range" min="1" max="64" step="1" value="8" />
+          </label>
+        </div>
+
+        <div class="group" aria-label="Board controls">
+          <label class="switch" title="Toggle grid (G)">
+            <input id="gridToggle" type="checkbox" checked />
+            <span>Grid</span>
+          </label>
+
+          <label class="control" title="Theme">
+            <span>Theme</span>
+            <select id="theme">
+              <option value="sepia-dark">Sepia dark</option>
+              <option value="sepia-light">Sepia light</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="group" aria-label="History">
+          <button id="undo" class="tool-btn" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+          <button id="redo" class="tool-btn" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+          <button id="clear" class="tool-btn" title="Clear (Del)">Clear</button>
+        </div>
+
+        <div class="group" aria-label="Export">
+          <button id="export" class="tool-btn" title="Download PNG">Export</button>
+          <button id="copy" class="tool-btn" title="Copy image to clipboard">Copy</button>
+        </div>
+      </header>
+
+      <main class="board" id="board" aria-label="Drawing board">
+        <canvas id="bgCanvas" aria-hidden="true"></canvas>
+        <canvas id="drawCanvas" aria-label="Drawing layer"></canvas>
+        <canvas id="overlayCanvas" aria-hidden="true"></canvas>
+        <textarea id="textInput" class="text-input hidden" spellcheck="false" placeholder="Type… (Enter to commit, Shift+Enter for newline)"></textarea>
+      </main>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+  </html>
+
 <!doctype html>
 <html lang="en">
 <head>
